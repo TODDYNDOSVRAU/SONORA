@@ -2,9 +2,9 @@
 
 ## Estado atual
 
-Ainda não existe um ZIP KernelSU instalável nem um APK Android compilado. O alvo reporta Samsung SM-S911B / `dm1q`, ABI `arm64-v8a`, Android 17 / SDK 37, build `S911BXXUAZZHL`, fingerprint `samsung/dm1qxxx/dm1q:17/CP2A.260605.016/S911BXXUAZZHL:user/release-keys`, patch `2026-08-05` e kernel `5.15.207-g35b4d63d`. SELinux está `Enforcing`.
+Ainda não existe um ZIP KernelSU instalável nem um APK Android compilado. O alvo reporta Samsung SM-S911B / `dm1q`, ABI `arm64-v8a`, Android 17 / SDK 37, build `S911BXXUAZZHL`, fingerprint `samsung/dm1qxxx/dm1q:17/CP2A.260605.016/S911BXXUAZZHL:user/release-keys`, patch `2026-08-05` e kernel `5.15.207-g35b4d63d`. A coleta mais recente confirmou SELinux `Enforcing` e root (`uid=0`, domínio `u:r:ksu:s`).
 
-Termux confirmou root (`uid=0`). `/data/vendor/audio` existe como `audio:audio`, modo `0770`, contexto `u:object_r:vendor_audio_data_file:s0`. `/data/misc/audio` não existe. O comando enviado tinha o typo `1s` e espaços nos caminhos, então não consultou `/data/adb/modules`. As versões do KernelSU core/Manager e do metamodule seguem desconhecidas.
+`/data/vendor/audio` existe como `audio:audio`, modo `0770`, contexto `u:object_r:vendor_audio_data_file:s0`; `/data/vendor` usa `vendor_data_file`. `/data/misc/audio` não existe. `/data/adb/modules` foi consultado e lista `playintegrityfix`, `zygisk_vector` e `zygisksu`; os metadados fornecidos não identificam um metamodule de montagem. `zygisk_vector` e `zygisksu` são apresentados como componentes Zygisk e não serão presumidos como metamodule. A versão do KernelSU core, do Manager e o nome/versão de qualquer metamodule ativo ainda não foram fornecidos.
 
 ## XML e chain de áudio
 
@@ -24,6 +24,6 @@ Os testes host cobrem bypass, posição estéreo, rejeição de configuração m
 
 ## O que falta para empacotar e validar
 
-`kernelsu/` contém somente `module.prop` e hooks experimentais de boot/desinstalação; faltam as bibliotecas e o binário compilados, a cópia XML selecionada, o overlay e as regras de contexto/SELinux. **Não é um módulo instalável.** Antes do ZIP, faltam: versão KernelSU core/Manager; nome e versão do metamodule (ou confirmação de que não há); confirmação do caminho de XML usado pelo loader; build NDK; validação de leitura do arquivo pelo domínio `audioserver`; e teste de reprodução no aparelho. O metamodule determina o overlay systemless; consulte o [guia oficial de módulos KernelSU](https://kernelsu.org/guide/module.html).
+`kernelsu/` contém somente `module.prop` e hooks experimentais de boot/desinstalação; faltam as bibliotecas e o binário compilados, a cópia XML selecionada, o overlay e as regras de contexto/SELinux. **Não é um módulo instalável.** Antes do ZIP, faltam: versões KernelSU core e Manager; identificação do metamodule ativo ou confirmação explícita de que não há; confirmação do caminho de XML usado pelo loader; build NDK; validação de leitura do arquivo pelo domínio `audioserver`; e teste de reprodução no aparelho. O metamodule determina o overlay systemless; consulte o [guia oficial de módulos KernelSU](https://kernelsu.org/guide/module.html).
 
 O APK e o módulo são artefatos separados; o APK deve ser construído pelo fluxo Mobile do Dashboard WebDev. Não instalar nada automaticamente no telefone. O DSP não grava nem transmite áudio de outros apps; o efeito proposto atende somente à cadeia `music` se o firmware carregar o plugin. O bypass é o padrão e o hook de desinstalação tenta desativá-lo antes da remoção; reinicie depois de remover um efeito que o AudioFlinger tenha carregado.
