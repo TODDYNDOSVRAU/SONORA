@@ -33,6 +33,7 @@ export interface EngineStatus {
   platform: "android" | "web" | "ios" | "unknown";
   rootAvailable: boolean;
   kernelModuleInstalled: boolean;
+  controlReady: boolean;
   effectListed: boolean;
   outputRoute: string | null;
   detail: string;

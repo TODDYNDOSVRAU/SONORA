@@ -4,6 +4,7 @@ export type NativeEngineStatus = {
   platform: "android";
   rootAvailable: boolean;
   kernelModuleInstalled: boolean;
+  controlReady: boolean;
   effectListed: boolean;
   outputRoute: string | null;
   detail: string;

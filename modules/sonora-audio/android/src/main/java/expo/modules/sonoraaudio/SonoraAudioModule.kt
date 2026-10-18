@@ -4,10 +4,10 @@ import android.content.Context
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
+import android.os.SystemClock
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 private const val MODULE_DIR = "/data/adb/modules/sonora_spatial_audio"
 private const val CONTROL_BIN = "$MODULE_DIR/bin/sonora-ctl"
@@ -44,18 +44,48 @@ class SonoraAudioModule : Module() {
       val process = ProcessBuilder("su", "-c", command)
         .redirectErrorStream(true)
         .start()
-      val completed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS)
-      } else {
-        process.waitFor()
-        true
+      val output = StringBuilder()
+      val reader = Thread {
+        try {
+          process.inputStream.bufferedReader().useLines { lines ->
+            lines.forEach { line ->
+              synchronized(output) {
+                if (output.length < 16_384) output.append(line).append('\n')
+              }
+            }
+          }
+        } catch (_: Exception) {
+          // The process may close its stream after timeout/destruction.
+        }
       }
-      if (!completed) {
-        process.destroyForcibly()
-        return CommandResult(-1, "Tempo limite ao aguardar resposta do su.")
+      reader.name = "Sonora-su-output"
+      reader.isDaemon = true
+      reader.start()
+
+      val deadline = SystemClock.elapsedRealtime() + timeoutMillis
+      var exitCode: Int? = null
+      try {
+        while (SystemClock.elapsedRealtime() < deadline) {
+          try {
+            exitCode = process.exitValue()
+            break
+          } catch (_: IllegalThreadStateException) {
+            Thread.sleep(20)
+          }
+        }
+      } catch (_: InterruptedException) {
+        Thread.currentThread().interrupt()
       }
-      val output = process.inputStream.bufferedReader().use { it.readText() }
-      CommandResult(process.exitValue(), output.trim())
+
+      if (exitCode == null) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) process.destroyForcibly() else process.destroy()
+        runCatching { reader.join(500) }
+        val captured = synchronized(output) { output.toString().trim() }
+        return CommandResult(-1, captured.ifBlank { "Tempo limite ao aguardar resposta do su." })
+      }
+      runCatching { reader.join(500) }
+      val captured = synchronized(output) { output.toString().trim() }
+      CommandResult(exitCode ?: -1, captured)
     } catch (error: Exception) {
       CommandResult(-1, error.message ?: "Falha ao executar su")
     }
@@ -74,7 +104,7 @@ class SonoraAudioModule : Module() {
   private fun getStatus(): Map<String, Any?> {
     val route = getOutputRoute()
     if (!preferences().getBoolean(ROOT_APPROVED_KEY, false)) {
-      return statusMap(false, false, false, route, "Toque em CONECTAR ROOT para solicitar acesso pelo KernelSU Manager.")
+      return statusMap(false, false, false, false, route, "Toque em CONECTAR ROOT para solicitar acesso pelo KernelSU Manager.")
     }
 
     val command = """
@@ -89,19 +119,19 @@ class SonoraAudioModule : Module() {
     val rootOk = result.exitCode == 0 && result.output.contains("ROOT=1")
     if (!rootOk) {
       preferences().edit().putBoolean(ROOT_APPROVED_KEY, false).apply()
-      return statusMap(false, false, false, route, "O acesso root não está disponível. Refaça a autorização no KernelSU Manager.")
+      return statusMap(false, false, false, false, route, "O acesso root não está disponível. Refaça a autorização no KernelSU Manager.")
     }
 
     val moduleInstalled = result.output.contains("MODULE=1")
     val controlReady = result.output.contains("CONTROL=1")
-    val effectListed = moduleInstalled && controlReady && result.output.contains("EFFECT=1")
+    val effectListed = result.output.contains("EFFECT=1")
     val detail = when {
       !moduleInstalled -> "Root ativo; o módulo Sonora não foi detectado como ativo no diretório KernelSU."
       !controlReady -> "Módulo detectado, mas helper ou estado compartilhado não está pronto. Nenhum áudio foi alterado."
       !effectListed -> "Módulo e helper detectados; o nome do efeito ainda não aparece no AudioFlinger. Inicie uma reprodução e atualize o estado."
       else -> "O nome Sonora aparece no AudioFlinger; isso não confirma que o callback processa áudio ou que a mudança esteja audível."
     }
-    return statusMap(true, moduleInstalled, effectListed, route, detail)
+    return statusMap(true, moduleInstalled, controlReady, effectListed, route, detail)
   }
 
   private fun applySettings(input: Map<String, Any?>): Map<String, Any> {
@@ -129,18 +159,33 @@ class SonoraAudioModule : Module() {
     val enabledArg = if (enabled) "1" else "0"
     val preampArg = String.format(Locale.US, "%.1f", preampDb)
     val eqArg = gains.joinToString(",") { String.format(Locale.US, "%.1f", it) }
-    val command = "if [ -x '$CONTROL_BIN' ]; then '$CONTROL_BIN' apply $enabledArg $position $preampArg '$eqArg'; else echo CONTROL_HELPER_MISSING; exit 127; fi"
+    val command = """
+      if [ "$(id -u)" != "0" ]; then echo ROOT=0; exit 1; fi
+      if [ ! -f '$MODULE_DIR/module.prop' ] || ! grep -q '^id=sonora_spatial_audio$' '$MODULE_DIR/module.prop' || [ -f '$MODULE_DIR/disable' ]; then echo MODULE_NOT_ACTIVE; exit 1; fi
+      if [ ! -x '$CONTROL_BIN' ]; then echo CONTROL_HELPER_MISSING; exit 127; fi
+      if ! '$CONTROL_BIN' status 2>/dev/null | grep -q '^CONTROL=1$'; then echo CONTROL_NOT_READY; exit 2; fi
+      '$CONTROL_BIN' apply $enabledArg $position $preampArg '$eqArg'
+    """.trimIndent()
     val result = runRoot(command)
-    val success = result.exitCode == 0 && !result.output.contains("CONTROL_HELPER_MISSING")
+    val success = result.exitCode == 0 && !result.output.contains("CONTROL_HELPER_MISSING") && !result.output.contains("CONTROL_NOT_READY")
+    val detail = when {
+      success -> "Parâmetros encaminhados ao módulo Sonora."
+      result.output.contains("ROOT=0") -> "A execução root deixou de estar disponível; reconecte pelo KernelSU Manager."
+      result.output.contains("MODULE_NOT_ACTIVE") -> "O módulo Sonora não está ativo no diretório KernelSU."
+      result.output.contains("CONTROL_HELPER_MISSING") -> "O helper do módulo Sonora está ausente."
+      result.output.contains("CONTROL_NOT_READY") -> "O helper ou o estado compartilhado ainda não está pronto. Nenhum áudio foi alterado."
+      else -> "Falha ao encaminhar parâmetros: ${result.output.ifBlank { "helper indisponível" }}"
+    }
     return mapOf(
       "ok" to success,
-      "detail" to if (success) "Parâmetros encaminhados ao módulo Sonora." else "Falha ao encaminhar parâmetros: ${result.output.ifBlank { "helper ausente" }}"
+      "detail" to detail
     )
   }
 
   private fun statusMap(
     rootAvailable: Boolean,
     kernelModuleInstalled: Boolean,
+    controlReady: Boolean,
     effectListed: Boolean,
     outputRoute: String?,
     detail: String
@@ -148,6 +193,7 @@ class SonoraAudioModule : Module() {
     "platform" to "android",
     "rootAvailable" to rootAvailable,
     "kernelModuleInstalled" to kernelModuleInstalled,
+    "controlReady" to controlReady,
     "effectListed" to effectListed,
     "outputRoute" to outputRoute,
     "detail" to detail,

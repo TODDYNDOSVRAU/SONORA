@@ -8,7 +8,9 @@
 extern "C" {
 #endif
 
+#ifndef SONORA_EQ_BANDS
 #define SONORA_EQ_BANDS 10
+#endif
 
 typedef enum SonoraPosition {
   SONORA_POSITION_CENTER = 0,

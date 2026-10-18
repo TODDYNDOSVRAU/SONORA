@@ -2,22 +2,28 @@
 
 ## Estado atual
 
-Ainda não existe um ZIP instalável nem um APK Android compilado. O TAR posterior, coletado pelo Termux, confirma SM-S911B / `dm1q`, ABI `arm64-v8a`, Android 17 / SDK 37, build `S911BXXUAZZHL`, fingerprint `samsung/dm1qxxx/dm1q:17/CP2A.260605.016/S911BXXUAZZHL:user/release-keys`, patch `2026-08-05` e kernel `5.15.207-g35b4d63d`. O SELinux está `Enforcing`.
+Ainda não existe um ZIP KernelSU instalável nem um APK Android compilado. O alvo reporta Samsung SM-S911B / `dm1q`, ABI `arm64-v8a`, Android 17 / SDK 37, build `S911BXXUAZZHL`, fingerprint `samsung/dm1qxxx/dm1q:17/CP2A.260605.016/S911BXXUAZZHL:user/release-keys`, patch `2026-08-05` e kernel `5.15.207-g35b4d63d`. SELinux está `Enforcing`.
 
-## Achados dos XMLs do aparelho
+Termux confirmou root (`uid=0`). `/data/vendor/audio` existe como `audio:audio`, modo `0770`, contexto `u:object_r:vendor_audio_data_file:s0`. `/data/misc/audio` não existe. O comando enviado tinha o typo `1s` e espaços nos caminhos, então não consultou `/data/adb/modules`. As versões do KernelSU core/Manager e do metamodule seguem desconhecidas.
 
-Os 31 XMLs do TAR foram parseados com sucesso. `/vendor/etc/audio_effects_sec.xml` declara `dap_proxy` (`libswdap.so`) e a cadeia `postprocess` com `sa3d` para os streams `music`, `ring` e `alarm`. `/vendor/etc/audio_effects_spatializer.xml` registra `libswspatializer.so` com UUID `ccd4cf09-a79d-46c2-9aae-06a1698d6c8f`. O inventário lista essas bibliotecas em `/vendor/lib64/soundfx` com contexto `vendor_file`; a listagem também contém a árvore 32-bit `/vendor/lib/soundfx`. O dump de AudioFlinger mostra uma chain de sessão 0 com dois efeitos e o nome `Dolby_Spatializer_FX`. Isso demonstra recursos OEM presentes/configurados, mas não prova que nosso efeito esteja ativo, que todas as saídas/apps passem por essa cadeia ou que haja uma API pública para controlar o efeito proprietário.
+## XML e chain de áudio
 
-O plano é adicionar somente o plugin Sonora próprio, sem copiar, substituir ou redistribuir `libswdap.so`, `libswspatializer.so` ou outras bibliotecas OEM. A escolha do XML/chain exato precisa preservar os efeitos Samsung já declarados; qualquer sobreposição deve manter o arquivo original completo e ser reversível.
+Os 31 XMLs do TAR foram parseados com sucesso. `/vendor/etc/audio_effects_sec.xml` declara `dap_proxy` (`libswdap.so`) e `sa3d` para os streams `music`, `ring` e `alarm`. `/vendor/etc/audio_effects_spatializer.xml` registra `libswspatializer.so` com UUID `ccd4cf09-a79d-46c2-9aae-06a1698d6c8f`. O dump do AudioFlinger inclui `Dolby_Spatializer_FX`, mas isso não prova que o plugin Sonora será carregado ou que buffers sejam processados.
 
-## Dados ainda necessários
+`audio-config-paths.txt` lista tanto `/vendor/etc/audio_effects_sec.xml` quanto `/system/vendor/etc/audio_effects_sec.xml`; as cópias encontradas são idênticas. Essa lista não prova qual caminho o loader seleciona em runtime nem se são aliases no aparelho. O overlay do módulo ainda não escolhe caminho.
 
-O TAR não inclui rótulos de `/data/vendor/audio`, `/data/vendor`, `/data/misc/audio` nem a versão do KernelSU Manager/metamodule. Esses dados ainda são necessários para definir um arquivo de controle que o `audioserver` possa ler sob SELinux enforcing e a montagem `system/` aceita pelo KernelSU. O erro anterior de `su` veio do shell ADB e não é prova de ausência do KernelSU.
+`scripts/merge-s23-audio-effects.py` insere library/effect/`apply` Sonora após `sa3d`, somente no stream `music`, gravando uma cópia nova do XML. Foi testado contra o XML Samsung recebido: valida a estrutura, é idempotente e preserva o texto original fora das três inserções. Não modifica o aparelho, não sobrescreve o original nem copia bibliotecas OEM.
 
-## Requisitos antes de empacotar
+## IPC, permissões e inicialização
 
-A sintaxe dos XMLs foi validada, mas ainda não foi comprovado qual arquivo/chain o serviço está carregando como caminho de pós-processamento global, nem que o plugin Sonora seja aceito pelo loader específico desta build. Também faltam os rótulos SELinux do diretório de estado compartilhado para decidir onde `audioserver` poderá ler o bloco `mmap`. Um efeito legado AOSP só será empacotado após validar esse caminho; não substituir a configuração OEM às cegas. O plugin e o helper precisam ser compilados com o mesmo `SONORA_CONTROL_FILE` e ABI compatível com a build real.
+O caminho candidato do bloco de controle é `/data/vendor/audio/sonora_state.bin`. O helper cria apenas arquivo novo como `root:audio`, modo `0640`; rejeita symlinks, hardlinks e arquivos preexistentes com owner, grupo, modo ou tamanho incorretos. O plugin abre em leitura e valida tipo, tamanho, owner/grupo e link count antes do `mmap`. A ABI de 64 bytes usa palavras de 32 bits acessadas atomicamente; floats são transmitidos como bits. O callback não abre arquivos, não aloca e não usa mutex. Dois slots de DSP e um contador de leitores deixam `SET_CONFIG` preparar e publicar uma configuração sem mutar o DSP em uso; `RESET` é executado no callback.
 
-O diretório `system/` de um módulo KernelSU só é montado com um metamodule compatível; `module.prop` é obrigatório para o reconhecimento do módulo. Consulte o [guia oficial de módulos KernelSU](https://kernelsu.org/guide/module.html). A implementação deve incluir merge reversível da configuração original, validação de pré-requisitos, scripts de desativação/remoção e uma rota clara de recuperação.
+`post-fs-data.sh` tenta inicializar o estado antes do carregamento normal dos efeitos. O plugin também tenta remapear em `SET_CONFIG`/`ENABLE` se o arquivo não existia quando a instância foi criada. O helper usa `O_NOFOLLOW` e, na branch Android, fixa a cadeia de diretórios e exige `/data/vendor/audio` com owner/grupo/permissões reportados. Isso ainda não prova que SELinux permita ao domínio `audioserver` abrir/mapear o arquivo.
 
-O APK e o módulo são artefatos separados. O APK final será construído pelo fluxo Mobile do Dashboard WebDev; o ZIP depende dos dados pendentes, de build NDK e de validação controlada no aparelho. Não instalar no telefone automaticamente. O callback de áudio lê parâmetros locais via `mmap`; o aplicativo não grava nem transmite o áudio de outros apps.
+Os testes host cobrem bypass, posição estéreo, rejeição de configuração mono, symlink, flag AOSP `INSERT_LAST`, remapeamento tardio e reconfiguração concorrente. O helper e a branch Android do plugin/helper compilam no compilador host com `__ANDROID__`; **não** foram compilados com o NDK nem carregados no S23.
+
+## O que falta para empacotar e validar
+
+`kernelsu/` contém somente `module.prop` e hooks experimentais de boot/desinstalação; faltam as bibliotecas e o binário compilados, a cópia XML selecionada, o overlay e as regras de contexto/SELinux. **Não é um módulo instalável.** Antes do ZIP, faltam: versão KernelSU core/Manager; nome e versão do metamodule (ou confirmação de que não há); confirmação do caminho de XML usado pelo loader; build NDK; validação de leitura do arquivo pelo domínio `audioserver`; e teste de reprodução no aparelho. O metamodule determina o overlay systemless; consulte o [guia oficial de módulos KernelSU](https://kernelsu.org/guide/module.html).
+
+O APK e o módulo são artefatos separados; o APK deve ser construído pelo fluxo Mobile do Dashboard WebDev. Não instalar nada automaticamente no telefone. O DSP não grava nem transmite áudio de outros apps; o efeito proposto atende somente à cadeia `music` se o firmware carregar o plugin. O bypass é o padrão e o hook de desinstalação tenta desativá-lo antes da remoção; reinicie depois de remover um efeito que o AudioFlinger tenha carregado.

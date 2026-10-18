@@ -32,10 +32,11 @@ export async function readEngineStatus(): Promise<EngineStatus> {
       platform,
       rootAvailable: false,
       kernelModuleInstalled: false,
+      controlReady: false,
       effectListed: false,
       outputRoute: null,
       detail: platform === "web"
-        ? "A prévia web não controla o áudio global do Android. Abra o APK no dispositivo."
+        ? "A prévia web não controla o mix de mídia do Android. Abra o APK no dispositivo."
         : "O Sonora está planejado para Android; esta plataforma não tem o módulo de sistema.",
       checkedAt: Date.now(),
     };
@@ -46,6 +47,7 @@ export async function readEngineStatus(): Promise<EngineStatus> {
       platform,
       rootAvailable: false,
       kernelModuleInstalled: false,
+      controlReady: false,
       effectListed: false,
       outputRoute: null,
       detail: "Módulo nativo ausente neste build; nenhum áudio foi alterado.",
@@ -59,6 +61,7 @@ export async function readEngineStatus(): Promise<EngineStatus> {
       platform,
       rootAvailable: Boolean(native.rootAvailable),
       kernelModuleInstalled: Boolean(native.kernelModuleInstalled),
+      controlReady: Boolean(native.controlReady),
       effectListed: Boolean(native.effectListed),
       outputRoute: native.outputRoute ?? null,
       detail: native.detail ?? "Estado do mecanismo atualizado.",
@@ -69,6 +72,7 @@ export async function readEngineStatus(): Promise<EngineStatus> {
       platform,
       rootAvailable: false,
       kernelModuleInstalled: false,
+      controlReady: false,
       effectListed: false,
       outputRoute: null,
       detail: error instanceof Error ? error.message : "Não foi possível consultar o módulo.",
@@ -94,7 +98,7 @@ export async function requestRootPermission(): Promise<{ ok: boolean; detail: st
 
 export async function sendSettings(settings: AudioSettings): Promise<{ ok: boolean; detail: string }> {
   if (platformName() !== "android") {
-    return { ok: false, detail: "O processamento global só existe no APK Android com o módulo KernelSU." };
+    return { ok: false, detail: "O processamento do mix de mídia existe somente no APK Android com o módulo KernelSU compatível." };
   }
   if (!nativeAudio) {
     return { ok: false, detail: "Ponte nativa ausente neste build; o áudio não foi alterado." };

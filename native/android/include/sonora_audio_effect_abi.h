@@ -58,10 +58,10 @@ typedef struct buffer_config_s {
   audio_buffer_t buffer;
   uint32_t samplingRate;
   uint32_t channels;
-  buffer_provider_t bufferProvider;
   uint8_t format;
   uint8_t accessMode;
   uint16_t mask;
+  buffer_provider_t bufferProvider;
 } buffer_config_t;
 
 typedef struct effect_config_s {
@@ -110,13 +110,30 @@ enum {
 #define AUDIO_EFFECT_LIBRARY_INFO_SYM AELI
 #define AUDIO_FORMAT_PCM_16_BIT 0x1u
 #define AUDIO_FORMAT_PCM_FLOAT 0x5u
+#define EFFECT_FLAG_TYPE_MASK 0x00000007u
 #define EFFECT_FLAG_TYPE_INSERT 0u
+#define EFFECT_FLAG_INSERT_FIRST (1u << 3)
 #define EFFECT_FLAG_INSERT_LAST (2u << 3)
+#define AUDIO_CHANNEL_OUT_MONO 0x1u
+#define AUDIO_CHANNEL_OUT_STEREO 0x3u
+#define EFFECT_BUFFER_ACCESS_WRITE 0u
+#define EFFECT_BUFFER_ACCESS_READ 1u
 #define EFFECT_BUFFER_ACCESS_ACCUMULATE 2u
 
 #ifdef __cplusplus
 }
 static_assert(sizeof(audio_uuid_t) == 16, "AOSP audio UUID layout changed");
+static_assert(EFFECT_FLAG_TYPE_MASK == 7u && EFFECT_FLAG_TYPE_INSERT == 0u, "AOSP effect type flags changed");
+static_assert(EFFECT_FLAG_INSERT_FIRST == 8u && EFFECT_FLAG_INSERT_LAST == 16u, "AOSP insert ordering flags changed");
+static_assert(EFFECT_BUFFER_ACCESS_WRITE == 0u && EFFECT_BUFFER_ACCESS_READ == 1u, "AOSP effect buffer access values changed");
+#if INTPTR_MAX == INT64_MAX
+static_assert(offsetof(buffer_config_t, format) == 24, "AOSP ARM64 buffer format offset changed");
+static_assert(offsetof(buffer_config_t, accessMode) == 25, "AOSP ARM64 buffer access offset changed");
+static_assert(offsetof(buffer_config_t, mask) == 26, "AOSP ARM64 buffer mask offset changed");
+static_assert(offsetof(buffer_config_t, bufferProvider) == 32, "AOSP ARM64 provider offset changed");
+static_assert(sizeof(buffer_config_t) == 56, "AOSP ARM64 buffer config size changed");
+static_assert(sizeof(effect_config_t) == 112, "AOSP ARM64 effect config size changed");
+#endif
 #endif
 
 #endif

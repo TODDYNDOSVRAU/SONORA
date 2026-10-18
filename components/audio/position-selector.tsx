@@ -10,7 +10,7 @@ const C = {
   panel: "#121B1E",
 };
 
-const POINTS: Array<{ id: SpatialPosition; x: number; y: number }> = [
+const POINTS: { id: SpatialPosition; x: number; y: number }[] = [
   { id: "front", x: 150, y: 20 },
   { id: "left", x: 28, y: 88 },
   { id: "center", x: 150, y: 88 },

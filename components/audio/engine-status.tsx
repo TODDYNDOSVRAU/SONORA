@@ -11,12 +11,13 @@ interface EngineStatusProps {
 }
 
 export function EngineStatusCard({ status, onRefresh, onConnectRoot }: EngineStatusProps) {
-  const ready = Boolean(status?.rootAvailable && status?.kernelModuleInstalled && status?.effectListed);
+  const ready = Boolean(status?.rootAvailable && status?.kernelModuleInstalled && status?.controlReady && status?.effectListed);
   const needsRoot = status?.platform === "android" && !status.rootAvailable;
-  const title = ready ? "EFEITO LISTADO" : status?.platform === "web" ? "PRÉVIA WEB" : needsRoot ? "ROOT NÃO CONECTADO" : "AGUARDANDO MÓDULO";
+  const title = !status ? "CONSULTANDO ESTADO" : status.platform === "web" ? "PRÉVIA WEB" : status.platform !== "android" ? "ANDROID NECESSÁRIO" : needsRoot ? "ROOT NÃO CONECTADO" : !status.kernelModuleInstalled ? "MÓDULO AUSENTE" : !status.controlReady ? "CONTROLE INDISPONÍVEL" : !status.effectListed ? "EFEITO NÃO LISTADO" : "EFEITO LISTADO";
   const rows = [
     { label: "ACESSO SU", ok: Boolean(status?.rootAvailable) },
     { label: "MÓDULO DETECTADO", ok: Boolean(status?.kernelModuleInstalled) },
+    { label: "CONTROLE PRONTO", ok: Boolean(status?.controlReady) },
     { label: "NOME DO EFEITO LISTADO", ok: Boolean(status?.effectListed) },
   ];
 
@@ -46,7 +47,7 @@ export function EngineStatusCard({ status, onRefresh, onConnectRoot }: EngineSta
         ))}
       </View>
       <Text style={styles.detail}>{status?.detail ?? "Consultando o estado do motor…"}</Text>
-      <Text style={styles.disclaimer}>A lista mostra saídas detectadas, não a rota ativa. O nome aparecer no AudioFlinger não prova que buffers estejam sendo processados; confirme com reprodução real. A prévia web não altera o áudio do telefone.</Text>
+      <Text style={styles.disclaimer}>A lista mostra saídas detectadas, não a rota ativa. A proposta altera somente a cadeia de mídia “music” se o firmware carregar o plugin. O nome no AudioFlinger não prova processamento; confirme com reprodução real. A prévia web não altera o áudio do telefone.</Text>
     </View>
   );
 }

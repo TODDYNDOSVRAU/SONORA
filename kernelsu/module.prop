@@ -1,0 +1,6 @@
+id=sonora_spatial_audio
+name=Sonora Spatial Audio
+version=0.1.0-experimental
+versionCode=1
+author=Sonora Project
+description=Experimental stereo DSP for the compatible Android music stream; requires the Sonora APK, a compatible KernelSU metamodule, and device-specific audio effect integration. Not Dolby-certified.

@@ -31,12 +31,13 @@ const C = {
 };
 
 export default function HomeScreen() {
-  const { settings, status, loading, notice, updateSettings, refreshStatus, requestRoot } = useAudioController();
+  const { settings, status, loading, notice, updateSettings, refreshStatus, requestRoot, applySavedSettings } = useAudioController();
   const [appState, setAppState] = useState(AppState.currentState);
-  const engineListed = Boolean(status?.rootAvailable && status?.kernelModuleInstalled && status?.effectListed);
+  const controlAvailable = Boolean(status?.rootAvailable && status?.kernelModuleInstalled && status?.controlReady);
+  const engineListed = Boolean(controlAvailable && status?.effectListed);
   const processingSubtitle = engineListed
-    ? settings.enabled ? "Ativação solicitada · áudio não confirmado" : "Efeito listado · bypass solicitado"
-    : status?.kernelModuleInstalled ? "Módulo detectado · aguardando efeito listado" : "Preferências salvas · motor indisponível";
+    ? settings.enabled ? "Ativação solicitada · mix não confirmado" : "Efeito listado · bypass solicitado"
+    : controlAvailable ? "Controle pronto · aguardando efeito listado" : status?.kernelModuleInstalled ? "Módulo detectado · controle indisponível" : "Preferências salvas · motor indisponível";
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (next) => {
@@ -76,7 +77,7 @@ export default function HomeScreen() {
             <View style={styles.versionPill}><Text style={styles.versionText}>DSP / 01</Text></View>
           </View>
 
-          <EngineStatusCard status={status} onRefresh={() => { void refreshStatus(); }} onConnectRoot={() => { void requestRoot(); }} />
+          <EngineStatusCard status={status} onRefresh={() => { void refreshStatus().then(() => applySavedSettings()); }} onConnectRoot={() => { void requestRoot(); }} />
 
           <View style={styles.sectionHeader}>
             <View>
@@ -98,7 +99,7 @@ export default function HomeScreen() {
               <Ionicons name="power-outline" size={18} color={engineListed && settings.enabled ? C.accent : C.muted} />
             </View>
             <View style={styles.toggleCopy}>
-              <Text style={styles.toggleTitle}>Processamento global</Text>
+              <Text style={styles.toggleTitle}>Áudio de mídia · music</Text>
               <Text style={styles.toggleSubtitle}>{processingSubtitle}</Text>
             </View>
             <Switch
@@ -106,7 +107,7 @@ export default function HomeScreen() {
               onValueChange={(enabled) => { void updateSettings({ enabled }); }}
               trackColor={{ false: "#2A393D", true: "#23766C" }}
               thumbColor={settings.enabled ? C.accent : "#A8B6B8"}
-              accessibilityLabel="Ativar processamento global Sonora"
+              accessibilityLabel="Ativar processamento Sonora no stream de mídia music"
             />
           </View>
 
@@ -146,19 +147,19 @@ export default function HomeScreen() {
 
           {notice ? (
             <View style={styles.notice}>
-              <Ionicons name={engineListed ? "checkmark-circle-outline" : "information-circle-outline"} size={16} color={engineListed ? C.accent : C.danger} />
+              <Ionicons name="information-circle-outline" size={16} color={C.muted} />
               <Text style={styles.noticeText}>{notice}</Text>
             </View>
           ) : null}
 
           <View style={styles.infoBlock}>
             <Text style={styles.infoTitle}>SOBRE A POSIÇÃO</Text>
-            <Text style={styles.infoText}>A posição usa pistas estéreo aproximadas de panorâmica, diferença de tempo e nível entre os canais e filtros espectrais, seguindo conceitos do guia técnico enviado. O processamento atua sobre o mix inteiro como uma única fonte virtual; não separa instrumentos nem objetos já combinados por outros apps. É um DSP próprio, não um renderer Dolby Atmos nem uma certificação Dolby.</Text>
+            <Text style={styles.infoText}>A posição usa pistas estéreo aproximadas de panorâmica, diferença de tempo e nível entre os canais e filtros espectrais, seguindo conceitos do guia técnico enviado. A integração proposta atua somente na cadeia de mídia “music”, se o firmware carregar o plugin, e processa o mix como uma única fonte virtual; não separa instrumentos nem objetos já combinados por outros apps. É um DSP próprio, não um renderer Dolby Atmos nem uma certificação Dolby.</Text>
           </View>
 
           <View style={styles.footer}>
             <View style={styles.footerLine} />
-            <Text style={styles.footerText}>{loading ? "INICIALIZANDO" : engineListed && settings.enabled ? "SONORA · ATIVAÇÃO SOLICITADA" : engineListed ? "SONORA · BYPASS SOLICITADO" : "AGUARDANDO ROOT + EFEITO COMPATÍVEL"}</Text>
+            <Text style={styles.footerText}>{loading ? "INICIALIZANDO" : engineListed && settings.enabled ? "SONORA · ATIVAÇÃO DO MIX MUSIC SOLICITADA" : engineListed ? "SONORA · BYPASS SOLICITADO" : "AGUARDANDO ROOT + EFEITO COMPATÍVEL"}</Text>
             <Text style={styles.footerSub}>{appState === "active" ? "Preferências guardadas neste aparelho" : ""}</Text>
           </View>
         </ScrollView>
