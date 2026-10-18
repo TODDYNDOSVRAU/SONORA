@@ -1,9 +1,19 @@
 # Sonora para KernelSU — integração dependente do firmware
 
-A árvore de fontes do plugin AOSP e do helper privilegiado está em `../native/android/`. Ainda não existe um ZIP instalável: o alvo informado é um Galaxy S23 SM-S911B com KernelSU e One UI 9 Beta, mas a configuração real da build não foi fornecida.
+## Estado atual
 
-Antes de gerar ou instalar o módulo, é necessário verificar no aparelho o `ro.build.fingerprint`, a ABI, a versão/target SDK, a configuração efetiva de efeitos de áudio, o caminho do `audio_effects*.xml`, a localização permitida para a biblioteca e o contexto SELinux que permita ao `audioserver` ler o bloco de controle compartilhado. Um efeito legado só será usado se a build realmente carregar esse formato de plugin; caso contrário, a integração deve parar, não trocar o XML do fabricante às cegas.
+Ainda não existe um ZIP instalável nem um APK Android compilado. O 7z enviado reporta Samsung SM-S911B / `dm1q`, ABI `arm64-v8a`, Android 17 / SDK 37, build `S911BXXUAZZHL`, fingerprint `samsung/dm1qxxx/dm1q:17/CP2A.260605.016/S911BXXUAZZHL:user/release-keys`, patch de segurança `2026-08-05` e kernel `5.15.207-g35b4d63d`.
 
-O arquivo de controle é compartilhado por `mmap`. O callback em tempo real apenas lê uma estrutura de 64 bytes protegida por sequence lock; o APK nunca grava áudio nem lê os fluxos de outros apps. O helper e o plugin precisam ser compilados com o mesmo `SONORA_CONTROL_FILE`. Essa constante é intencionalmente obrigatória na compilação Android para impedir que um caminho presumido seja empacotado.
+O 7z não contém os XMLs de efeitos. `audio-effect-config-paths.txt` e os relatórios de diretórios trazem erros de shell; `selinux-mode.txt` informa `su: inaccessible or not found`. Isso significa que a consulta root via ADB não foi bem-sucedida, não que o KernelSU esteja ausente. O acesso `su` por ADB depende da versão/configuração do gerenciador e o projeto não deve presumir o provedor root. Um issue upstream do KernelSU registra problemas de `su` em certos shells e a evolução desse comportamento: https://github.com/tiann/KernelSU/issues/2647
 
-Quando a evidência da build chegar, o pacote será montado como módulo KernelSU separado do APK, com cópia mesclada e reversível da configuração original e scripts de instalação/remoção apropriados. Não instalar no aparelho automaticamente.
+## Próxima coleta
+
+No Windows, use [`scripts/collect-s23-audio-target.ps1`](../scripts/collect-s23-audio-target.ps1). Esse coletor lê propriedades de build, procura `audio_effects*.xml` nos diretórios padrão e tenta copiá-los por ADB sem `su`; não altera arquivos do telefone nem grava áudio. Se algum XML continuar inacessível, anexe os arquivos diretamente, obtidos por um gerenciador de arquivos com root. Informe separadamente a versão do KernelSU Manager e o nome/versão do metamodule ativo (ou “nenhum”).
+
+## Requisitos antes de empacotar
+
+A configuração efetiva de áudio, as bibliotecas de efeitos e o contexto SELinux que permita ao `audioserver` acessar o bloco compartilhado ainda precisam ser verificados. Um efeito legado AOSP só será usado se a build realmente carregar esse formato de plugin; caso contrário, a integração deve parar, não trocar o XML do fabricante às cegas. O plugin e o helper precisam ser compilados com o mesmo `SONORA_CONTROL_FILE` e com headers/ABI compatíveis com a build real.
+
+O diretório `system/` de um módulo KernelSU só é montado com um metamodule compatível; `module.prop` é obrigatório para o reconhecimento do módulo. Consulte o [guia oficial de módulos KernelSU](https://kernelsu.org/guide/module.html). A implementação deve incluir merge reversível da configuração original, validação de pré-requisitos, scripts de desativação/remoção e uma rota clara de recuperação.
+
+O APK e o módulo são artefatos separados. O APK final será construído pelo fluxo Mobile do Dashboard WebDev; o ZIP depende dos dados pendentes, de build NDK e de validação controlada no aparelho. Não instalar no telefone automaticamente. O callback de áudio lê parâmetros locais via `mmap`; o aplicativo não grava nem transmite o áudio de outros apps.

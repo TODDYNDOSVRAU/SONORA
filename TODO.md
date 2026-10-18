@@ -1,6 +1,6 @@
 # TODO — Sonora
 
-> Progresso parcial: painel, persistência local, bridge Kotlin e DSP genérico existem no código; TypeScript, Vitest e testes host do DSP/plugin passaram. A tela distingue ativação solicitada de nome do efeito listado e não afirma processamento confirmado. Ainda não foi criado/compilado um APK Android nem um ZIP KernelSU instalável, e a integração não foi validada no Galaxy S23; por isso os resultados finais abaixo permanecem abertos.
+> Progresso parcial: painel, persistência local, bridge Kotlin e DSP genérico existem no código; TypeScript, Vitest e testes host do DSP/plugin passaram. A tela distingue ativação solicitada de nome do efeito listado e não afirma processamento confirmado. O 7z recebido reporta S911B/Android 17/SDK 37 e fingerprint `samsung/dm1qxxx/dm1q:17/CP2A.260605.016/S911BXXUAZZHL:user/release-keys`, mas não contém XMLs; o comando `su` via ADB falhou. Ainda não existe APK compilado nem ZIP KernelSU instalável e a integração não foi validada no Galaxy S23.
 
 ## APK Android companheiro: controles funcionais de áudio
 - [ ] Criar um APK Android próprio, com interface simples e funcional para controlar o processamento de áudio ao vivo do telefone e testar a reprodução em Bluetooth, alto-falantes e fones.
