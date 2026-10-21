@@ -1,6 +1,10 @@
 apply plugin: 'com.android.library'
 apply plugin: 'expo-module-gradle-plugin'
 
+expoModule {
+  canBePublished false
+}
+
 android {
   namespace "expo.modules.sonoraaudio"
   defaultConfig {
