@@ -26,7 +26,7 @@ jobs:
 
       - name: Install Android SDK components
         run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latesaat/bin/sdkmanager"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
 
